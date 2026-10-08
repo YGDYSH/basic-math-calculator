@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kalkulator Sederhana</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; justify-content: center; padding-top: 50px; padding-bottom: 50px; }
+    .kalkulator { background: #fff; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); width: 100%; max-width: 340px; padding: 20px; }
+    .layar { background: #1e1e1e; color: #fff; border-radius: 12px; padding: 24px; text-align: right; font-size: 2.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 80px; }
+    .layar-operasi { color: #888; font-size: 1rem; min-height: 1.2em; margin-bottom: 8px; }
+    .tombol-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .tombol { border: none; border-radius: 10px; padding: 20px 0; font-size: 1.4rem; font-weight: 600; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; user-select: none; }
+    .tombol:active { transform: scale(0.95); }
+    .tombol-angka { background: #f0f0f0; color: #1e1e1e; }
+    .tombol-angka:hover { background: #e0e0e0; }
+    .tombol-operator { background: #ff9500; color: #fff; }
+    .tombol-operator:hover { background: #cc7700; }
+    .tombol-aksi { background: #d4d4d4; color: #1e1e1e; }
+    .tombol-aksi:hover { background: #c4c4c4; }
+    .tombol-sama { grid-column: span 2; background: #ff9500; color: #fff; }
+    .tombol-sama:hover { background: #cc7700; }
+    @media (max-width: 360px) { .tombol { padding: 16px 0; font-size: 1.2rem; } }
+  </style>
+</head>
+<body>
+  <div class="kalkulator">
+    <div class="layar">
+      <div class="layar-operasi" id="layarOperasi"></div>
+      <div class="layar-utama" id="layarUtama">0</div>
+    </div>
+    <div class="tombol-grid">
+      <button class="tombol tombol-aksi" data-aksi="clear">C</button>
+      <button class="tombol tombol-aksi" data-aksi="hapus">⌫</button>
+      <button class="tombol tombol-operator" data-operator="/">÷</button>
+      <button class="tombol tombol-operator" data-operator="*">×</button>
+      <button class="tombol tombol-angka" data-angka="7">7</button>
+      <button class="tombol tombol-angka" data-angka="8">8</button>
+      <button class="tombol tombol-angka" data-angka="9">9</button>
+      <button class="tombol tombol-operator" data-operator="-">−</button>
+      <button class="tombol tombol-angka" data-angka="4">4</button>
+      <button class="tombol tombol-angka" data-angka="5">5</button>
+      <button class="tombol tombol-angka" data-angka="6">6</button>
+      <button class="tombol tombol-operator" data-operator="+">+</button>
+      <button class="tombol tombol-angka" data-angka="1">1</button>
+      <button class="tombol tombol-angka" data-angka="2">2</button>
+      <button class="tombol tombol-angka" data-angka="3">3</button>
+      <button class="tombol tombol-sama" data-aksi="hitung">=</button>
+      <button class="tombol tombol-angka" data-angka="0">0</button>
+      <button class="tombol tombol-angka" data-angka=".">.</button>
+    </div>
+  </div>
+
+  <script>
+    // ---------- UTILITAS ----------
+    // Pembulatan untuk hindari error floating point (0.1 + 0.2 = 0.30000000000000004)
+    const bulatkan = (n) => Number(n.toFixed(10));
+
+    // Format angka untuk tampilan (hapus trailing zeros, max 10 desimal)
+    const formatAngka = (n) => {
+      const str = String(bulatkan(n));
+      if (str.includes('e')) return str; // notasi ilmiah biarkan
+      const [intPart, decPart] = str.split('.');
+      return decPart ? intPart + '.' + decPart.replace(/0+$/, '') : intPart;
+    };
+
+    // ---------- STATE ----------
+    let nilaiSaatIni = '0';   // angka yang sedang diketik
+    let nilaiSebelumnya = null; // angka sebelumnya (operand kiri)
+    let operatorAktif = null;   // operator yang dipilih (+, -, *, /)
+    let tungguAngkaBaru = false; // flag: setelah operator ditekan, angka berikutnya menggantikan layar
+
+    // ---------- ELEMEN DOM ----------
+    const layarUtama = document.getElementById('layarUtama');
+    const layarOperasi = document.getElementById('layarOperasi');
+
+    // ---------- UPDATE TAMPILAN ----------
+    function updateLayar() {
+      layarUtama.textContent = nilaiSaatIni;
+      // Tampilkan operasi berjalan di baris atas
+      if (nilaiSebelumnya !== null && operatorAktif) {
+        const simbol = { '+': '+', '-': '−', '*': '×', '/': '÷' }[operatorAktif];
+        layarOperasi.textContent = `${formatAngka(nilaiSebelumnya)} ${simbol}`;
+      } else {
+        layarOperasi.textContent = '';
+      }
+    }
+
+    // ---------- LOGIKA ANGKA ----------
+    function inputAngka(angka) {
+      if (tungguAngkaBaru) {
+        nilaiSaatIni = angka === '.' ? '0.' : angka;
+        tungguAngkaBaru = false;
+      } else {
+        // Cegah titik desimal ganda
+        if (angka === '.' && nilaiSaatIni.includes('.')) return;
+        // Batasi panjang (opsional)
+        if (nilaiSaatIni.length >= 15) return;
+        nilaiSaatIni = nilaiSaatIni === '0' && angka !== '.' ? angka : nilaiSaatIni + angka;
+      }
+      updateLayar();
+    }
+
+    // ---------- LOGIKA OPERATOR ----------
+    function inputOperator(op) {
+      // Jika ada operator sebelumnya dan user menekan operator baru tanpa angka baru,
+      // ganti operator saja (tidak hitung)
+      if (operatorAktif && !tungguAngkaBaru) {
+        hitungHasil();
+      }
+      // Simpan nilai saat ini sebagai operand kiri
+      nilaiSebelumnya = parseFloat(nilaiSaatIni);
+      operatorAktif = op;
+      tungguAngkaBaru = true; // angka berikutnya akan menggantikan layar
+      updateLayar();
+    }
+
+    // ---------- LOGIKA HITUNG ----------
+    function hitungHasil() {
+      if (operatorAktif === null || nilaiSebelumnya === null) return;
+      const kanan = parseFloat(nilaiSaatIni);
+      let hasil;
+
+      switch (operatorAktif) {
+        case '+': hasil = bulatkan(nilaiSebelumnya + kanan); break;
+        case '-': hasil = bulatkan(nilaiSebelumnya - kanan); break;
+        case '*': hasil = bulatkan(nilaiSebelumnya * kanan); break;
+        case '/':
+          if (kanan === 0) {
+            layarUtama.textContent = 'Tidak bisa dibagi nol';
+            layarOperasi.textContent = '';
+            resetSetelahError();
+            return;
+          }
+          hasil = bulatkan(nilaiSebelumnya / kanan);
+          break;
+      }
+
+      nilaiSaatIni = formatAngka(hasil);
+      nilaiSebelumnya = null;
+      operatorAktif = null;
+      tungguAngkaBaru = true;
+      updateLayar();
+    }
+
+    // ---------- RESET ----------
+    function hapusSemua() {
+      nilaiSaatIni = '0';
+      nilaiSebelumnya = null;
+      operatorAktif = null;
+      tungguAngkaBaru = false;
+      updateLayar();
+    }
+
+    function hapusSatu() {
+      if (tungguAngkaBaru) return; // tidak hapus saat menunggu angka baru
+      if (nilaiSaatIni.length === 1 || (nilaiSaatIni.length === 2 && nilaiSaatIni.startsWith('-'))) {
+        nilaiSaatIni = '0';
+      } else {
+        nilaiSaatIni = nilaiSaatIni.slice(0, -1);
+      }
+      updateLayar();
+    }
+
+    function resetSetelahError() {
+      nilaiSaatIni = '0';
+      nilaiSebelumnya = null;
+      operatorAktif = null;
+      tungguAngkaBaru = true;
+      // Biarkan pesan error tampil sebentar, lalu reset setelah interaksi berikutnya
+    }
+
+    // ---------- EVENT TOMBOL ----------
+    document.querySelectorAll('.tombol').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.angka !== undefined) inputAngka(btn.dataset.angka);
+        else if (btn.dataset.operator !== undefined) inputOperator(btn.dataset.operator);
+        else if (btn.dataset.aksi === 'clear') hapusSemua();
+        else if (btn.dataset.aksi === 'hapus') hapusSatu();
+        else if (btn.dataset.aksi === 'hitung') hitungHasil();
+      });
+    });
+
+    // ---------- DUKUNGAN KEYBOARD ----------
+    window.addEventListener('keydown', (e) => {
+      // Angka 0-9
+      if (/^[0-9]$/.test(e.key)) { inputAngka(e.key); return; }
+      // Titik desimal
+      if (e.key === '.') { inputAngka('.'); return; }
+      // Operator
+      if (e.key === '+') { inputOperator('+'); return; }
+      if (e.key === '-') { inputOperator('-'); return; }
+      if (e.key === '*') { inputOperator('*'); return; }
+      if (e.key === '/') { e.preventDefault(); inputOperator('/'); return; }
+      // Enter / = untuk hitung
+      if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); hitungHasil(); return; }
+      // Backspace
+      if (e.key === 'Backspace') { hapusSatu(); return; }
+      // Escape untuk clear
+      if (e.key === 'Escape') { hapusSemua(); return; }
+    });
+
+    // Inisialisasi tampilan
+    updateLayar();
+  </script>
+</body>
+</html>
